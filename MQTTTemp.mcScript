@@ -1,0 +1,55 @@
+﻿//Send temperature, humidity and battery voltage in beacon
+//0 data byte - positive int temperatuer
+//1 data byte - humidity (in future)
+//3, 4 data byte - voltage
+Class MQTTTemp
+    Shared Event Boot() 
+        Lplan.SetLowPowerMode(600)
+        Lplan.SetBeaconTime(60000000)
+    End Event
+    
+    Shared Event PublishTemp() RaiseEvent Every 1 Minutes
+        Dim payload As ListOfByte = New ListOfByte()
+        Dim Tsensor As I2c
+        Dim temp As Integer
+        Dim strTemp As String
+        Dim battV As Short
+        Dim strbattV As String
+        Dim bConv As Byte
+        Dim conv As Integer
+        
+        Tsensor = I2c.Create(250000, Pin.SCL, Pin.SDA, 0x48)
+        
+        // Power up the sensor and give it some time to settle
+        Device.EnableTempSensor()
+        Thread.Sleep(40000) // See page 13 of the datasheet
+        
+        
+        // Read the sensor (only 1 bytes to read
+        Dim res As ListOfByte = Tsensor.Read(2)
+        //Set Beacon Data
+        //1-st byte Temperature
+        // power off
+        Device.DisableTempSensor()
+        If res = Nothing Then
+            res.AddByte(127)
+            res.AddByte(127)
+        Else
+            temp = res(0).SignExtend()
+            strTemp = temp.ToString()
+        End If
+        //2-nd byte Humidity
+        res.RemoveAt(1)
+        res.AddByte(0)
+        //3-rd byte - Reserved
+        res.AddByte(0)
+        //4-th byte - Voltage in 32mV step
+        battV = Device.BatteryVoltage()
+        conv = battV.ToInteger()
+        conv = conv >> 5
+        bConv = conv.ToByte
+        res.AddByte(bConv)
+        Lplan.SetBeaconData(res)
+        Lplan.SendBeacon()
+    End Event
+End Class 
